@@ -46,6 +46,7 @@ export const CalculatorScreen: React.FC<CalculatorScreenProps> = ({
   hasMemory,
   isError,
   errorMessage,
+  cursorPos = 0,
   contrast,
   activeBase,
   isMenuOpen,
@@ -55,6 +56,10 @@ export const CalculatorScreen: React.FC<CalculatorScreenProps> = ({
   keypadAction,
 }) => {
   const contrastClass = contrast > 5 ? 'brightness-95 contrast-105' : 'brightness-100';
+
+  const safeCursor = Math.min(Math.max(0, cursorPos), expression.length);
+  const beforeCursor = expression.slice(0, safeCursor);
+  const afterCursor = expression.slice(safeCursor);
 
   return (
     <div
@@ -168,11 +173,14 @@ export const CalculatorScreen: React.FC<CalculatorScreenProps> = ({
           <div className="flex min-h-[90px] flex-col justify-between">
             {/* Input expression line */}
             <div className="relative min-h-[36px] text-left text-[17px] sm:text-[19px] font-bold tracking-tight text-[#08120a] break-words whitespace-pre-wrap leading-snug">
-              {expression || (
+              {expression ? (
+                <span>
+                  <span>{beforeCursor}</span>
+                  <span className="inline-block w-1.5 h-4.5 bg-[#08120a] animate-pulse align-middle mx-[0.5px]" />
+                  <span>{afterCursor}</span>
+                </span>
+              ) : (
                 <span className="inline-block h-4.5 w-2 animate-pulse bg-[#08120a] align-middle opacity-80" />
-              )}
-              {expression && (
-                <span className="inline-block h-4 w-1.5 ml-0.5 animate-pulse bg-[#08120a] align-middle" />
               )}
             </div>
 

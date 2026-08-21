@@ -162,30 +162,45 @@ export default function App() {
     }
   }, [expression, settings, variables, mode, modeLabel]);
 
-  // Insert token into expression
+  // Insert token into expression at current cursor position
   const insertToken = useCallback((token: string) => {
     setIsError(false);
-    setExpression(prev => prev + token);
-  }, []);
+    setExpression(prev => {
+      const pos = Math.min(Math.max(0, cursorPos), prev.length);
+      const next = prev.slice(0, pos) + token + prev.slice(pos);
+      setCursorPos(pos + token.length);
+      return next;
+    });
+  }, [cursorPos]);
 
-  // Backspace DEL
+  // Backspace DEL before current cursor position
   const handleDel = useCallback(() => {
     setIsError(false);
     setExpression(prev => {
-      if (!prev) return '';
-      const funcMatch = prev.match(/(sin|cos|tan|asin|acos|atan|log_|log|ln|d\/dx|∫|Σ|Abs|GCD|LCM|Pol|Rec|ˣ√|√)\($/);
-      if (funcMatch) {
-        return prev.slice(0, -funcMatch[0].length);
+      if (!prev) {
+        setCursorPos(0);
+        return '';
       }
-      return prev.slice(0, -1);
+      const pos = Math.min(Math.max(0, cursorPos), prev.length);
+      if (pos <= 0) return prev;
+
+      const before = prev.slice(0, pos);
+      const after = prev.slice(pos);
+      const funcMatch = before.match(/(sin|cos|tan|asin|acos|atan|log_|log|ln|d\/dx|∫|Σ|Abs|GCD|LCM|Pol|Rec|ˣ√|√)\($/);
+      const deleteLength = funcMatch ? funcMatch[0].length : 1;
+
+      const next = before.slice(0, -deleteLength) + after;
+      setCursorPos(pos - deleteLength);
+      return next;
     });
-  }, []);
+  }, [cursorPos]);
 
   // All Clear AC
   const handleAC = useCallback(() => {
     setIsError(false);
     setErrorMessage('');
     setExpression('');
+    setCursorPos(0);
     setResult('');
     setExactResult('');
     setDecimalResult('');
@@ -543,6 +558,7 @@ export default function App() {
           const it = history[nextIdx];
           if (it) {
             setExpression(it.expression);
+            setCursorPos(it.expression.length);
             setResult(it.result);
           }
         }
@@ -555,13 +571,23 @@ export default function App() {
           const it = history[prevIdx];
           if (it) {
             setExpression(it.expression);
+            setCursorPos(it.expression.length);
             setResult(it.result);
           }
         } else if (historyIndex === 0) {
           setHistoryIndex(-1);
           setExpression('');
+          setCursorPos(0);
           setResult('');
         }
+        return;
+
+      case 'LEFT':
+        setCursorPos(prev => Math.max(0, prev - 1));
+        return;
+
+      case 'RIGHT':
+        setCursorPos(prev => Math.min(expression.length, prev + 1));
         return;
 
       default:
@@ -583,6 +609,7 @@ export default function App() {
     isAlpha,
     isMenuOpen,
     mode,
+    expression,
     handleCalculate,
     handleAC,
     handleDel,
@@ -674,6 +701,7 @@ export default function App() {
       setModeLabel(item.modeLabel);
     }
     setExpression(item.expression);
+    setCursorPos(item.expression.length);
     setResult(item.result);
     setExactResult(item.exactResult || item.result);
     setDecimalResult(item.decimalResult || item.result);
