@@ -5,9 +5,10 @@ interface KeypadProps {
   onKeyPress: (action: string, label?: string) => void;
   isShift: boolean;
   isAlpha: boolean;
+  isPowerOn?: boolean;
 }
 
-export const Keypad: React.FC<KeypadProps> = ({ onKeyPress, isShift, isAlpha }) => {
+export const Keypad: React.FC<KeypadProps> = ({ onKeyPress, isShift, isAlpha, isPowerOn = true }) => {
   const handleKey = (action: string, type: 'num' | 'func' | 'equals' | 'shift' | 'clear' = 'num', label?: string) => {
     sound.playKeyClick(type);
     onKeyPress(action, label);
@@ -24,13 +25,13 @@ export const Keypad: React.FC<KeypadProps> = ({ onKeyPress, isShift, isAlpha }) 
             id="btn-shift"
             type="button"
             onClick={() => handleKey('SHIFT', 'shift')}
-            className={`w-full py-1.5 sm:py-2 rounded-lg text-xs font-bold transition-all shadow-md active:translate-y-0.5 active:shadow-inner ${
+            className={`w-9 h-7 sm:w-11 sm:h-8 rounded-full text-[11px] font-black transition-all shadow-md active:translate-y-0.5 border flex items-center justify-center ${
               isShift
-                ? 'bg-amber-400 text-neutral-900 ring-2 ring-amber-300'
-                : 'bg-neutral-800 hover:bg-neutral-700 text-amber-400 border-t border-neutral-600'
+                ? 'bg-amber-400 text-neutral-900 border-amber-300 ring-2 ring-amber-400 shadow-amber-400/50'
+                : 'bg-gradient-to-b from-neutral-600 via-neutral-700 to-neutral-800 hover:from-neutral-500 text-amber-400 border-neutral-500 shadow-inner'
             }`}
           >
-            SHIFT
+            S
           </button>
         </div>
 
@@ -41,27 +42,27 @@ export const Keypad: React.FC<KeypadProps> = ({ onKeyPress, isShift, isAlpha }) 
             id="btn-alpha"
             type="button"
             onClick={() => handleKey('ALPHA', 'shift')}
-            className={`w-full py-1.5 sm:py-2 rounded-lg text-xs font-bold transition-all shadow-md active:translate-y-0.5 active:shadow-inner ${
+            className={`w-9 h-7 sm:w-11 sm:h-8 rounded-full text-[11px] font-black transition-all shadow-md active:translate-y-0.5 border flex items-center justify-center ${
               isAlpha
-                ? 'bg-rose-500 text-white ring-2 ring-rose-300'
-                : 'bg-neutral-800 hover:bg-neutral-700 text-rose-400 border-t border-neutral-600'
+                ? 'bg-rose-500 text-white border-rose-400 ring-2 ring-rose-400 shadow-rose-500/50'
+                : 'bg-gradient-to-b from-neutral-600 via-neutral-700 to-neutral-800 hover:from-neutral-500 text-rose-400 border-neutral-500 shadow-inner'
             }`}
           >
-            ALPHA
+            A
           </button>
         </div>
 
         {/* D-Pad REPLAY Wheel (Spans 2 columns) */}
         <div className="col-span-2 flex flex-col items-center justify-center">
-          <span className="text-[9px] font-bold text-neutral-400 uppercase tracking-wider">REPLAY</span>
-          <div className="relative w-[78px] h-[40px] sm:w-[86px] sm:h-[44px] rounded-full bg-gradient-to-b from-neutral-700 to-neutral-900 border border-neutral-500 shadow-inner flex items-center justify-center">
+          <span className="text-[8.5px] font-bold text-neutral-400 uppercase tracking-widest -mb-0.5">REPLAY</span>
+          <div className="relative w-[82px] h-[44px] sm:w-[94px] sm:h-[48px] rounded-[22px] bg-gradient-to-b from-[#3a414b] via-[#242930] to-[#171b20] border-2 border-neutral-500/80 shadow-lg flex items-center justify-center overflow-hidden">
             {/* Up */}
             <button
               id="dpad-up"
               type="button"
               onClick={() => handleKey('UP', 'func')}
-              className="absolute top-0.5 left-1/2 -translate-x-1/2 w-6 h-3 flex items-center justify-center text-neutral-300 hover:text-white text-[10px] font-black"
-              title="Lên (Lịch sử trước)"
+              className="absolute top-0.5 left-1/2 -translate-x-1/2 w-8 h-4 flex items-center justify-center text-neutral-300 hover:text-white hover:bg-white/10 active:bg-white/20 text-[9px] font-black transition-colors rounded-t-full"
+              title="Lên (▲)"
             >
               ▲
             </button>
@@ -70,20 +71,22 @@ export const Keypad: React.FC<KeypadProps> = ({ onKeyPress, isShift, isAlpha }) 
               id="dpad-left"
               type="button"
               onClick={() => handleKey('LEFT', 'func')}
-              className="absolute left-0.5 top-1/2 -translate-y-1/2 w-3 h-6 flex items-center justify-center text-neutral-300 hover:text-white text-[10px] font-black"
-              title="Sang trái"
+              className="absolute left-0.5 top-1/2 -translate-y-1/2 w-4 h-8 flex items-center justify-center text-neutral-300 hover:text-white hover:bg-white/10 active:bg-white/20 text-[9px] font-black transition-colors rounded-l-full"
+              title="Sang trái (◀)"
             >
               ◀
             </button>
-            {/* Center core */}
-            <div className="w-4 h-4 rounded-full bg-neutral-600 border border-neutral-400 shadow-sm" />
+            {/* Center metallic glossy core */}
+            <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-gradient-to-br from-neutral-400 via-neutral-700 to-neutral-900 border border-neutral-400 shadow-md flex items-center justify-center">
+              <div className="w-2.5 h-2.5 rounded-full bg-neutral-800 border border-neutral-600" />
+            </div>
             {/* Right */}
             <button
               id="dpad-right"
               type="button"
               onClick={() => handleKey('RIGHT', 'func')}
-              className="absolute right-0.5 top-1/2 -translate-y-1/2 w-3 h-6 flex items-center justify-center text-neutral-300 hover:text-white text-[10px] font-black"
-              title="Sang phải"
+              className="absolute right-0.5 top-1/2 -translate-y-1/2 w-4 h-8 flex items-center justify-center text-neutral-300 hover:text-white hover:bg-white/10 active:bg-white/20 text-[9px] font-black transition-colors rounded-r-full"
+              title="Sang phải (▶)"
             >
               ▶
             </button>
@@ -92,8 +95,8 @@ export const Keypad: React.FC<KeypadProps> = ({ onKeyPress, isShift, isAlpha }) 
               id="dpad-down"
               type="button"
               onClick={() => handleKey('DOWN', 'func')}
-              className="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-6 h-3 flex items-center justify-center text-neutral-300 hover:text-white text-[10px] font-black"
-              title="Xuống (Lịch sử sau)"
+              className="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-8 h-4 flex items-center justify-center text-neutral-300 hover:text-white hover:bg-white/10 active:bg-white/20 text-[9px] font-black transition-colors rounded-b-full"
+              title="Xuống (▼)"
             >
               ▼
             </button>
@@ -102,12 +105,15 @@ export const Keypad: React.FC<KeypadProps> = ({ onKeyPress, isShift, isAlpha }) 
 
         {/* MENU / SETUP */}
         <div className="flex flex-col items-center">
-          <span className="text-[10px] font-extrabold text-[#d97706] tracking-tight">SETUP</span>
+          <div className="flex items-center space-x-1 text-[9px] font-extrabold tracking-tighter">
+            <span className="text-neutral-300">MENU</span>
+            <span className="text-[#d97706]">SETUP</span>
+          </div>
           <button
             id="btn-menu"
             type="button"
             onClick={() => handleKey('MENU', 'func')}
-            className="w-full py-1.5 sm:py-2 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-200 text-[11px] sm:text-xs font-bold border-t border-neutral-600 shadow-md active:translate-y-0.5"
+            className="w-9 h-7 sm:w-11 sm:h-8 rounded-full bg-gradient-to-b from-neutral-600 via-neutral-700 to-neutral-800 hover:from-neutral-500 text-neutral-200 text-[10px] sm:text-[11px] font-extrabold border border-neutral-500 shadow-md active:translate-y-0.5 flex items-center justify-center"
           >
             MENU
           </button>
@@ -115,12 +121,17 @@ export const Keypad: React.FC<KeypadProps> = ({ onKeyPress, isShift, isAlpha }) 
 
         {/* ON */}
         <div className="flex flex-col items-center">
-          <span className="text-[10px] font-bold text-neutral-400">POWER</span>
+          <span className="text-[9px] font-black text-neutral-300">ON</span>
           <button
             id="btn-on"
             type="button"
             onClick={() => handleKey('ON', 'clear')}
-            className="w-full py-1.5 sm:py-2 rounded-lg bg-neutral-700 hover:bg-neutral-600 text-emerald-400 text-xs font-black border-t border-neutral-500 shadow-md active:translate-y-0.5"
+            className={`w-9 h-7 sm:w-11 sm:h-8 rounded-full text-[10px] sm:text-[11px] font-black border shadow-md active:translate-y-0.5 transition-all flex items-center justify-center ${
+              !isPowerOn
+                ? 'bg-emerald-600 hover:bg-emerald-500 text-white border-emerald-400 animate-pulse ring-2 ring-emerald-400/60 shadow-emerald-900/50'
+                : 'bg-gradient-to-b from-neutral-600 via-neutral-700 to-neutral-800 hover:from-neutral-500 text-emerald-400 border-neutral-500 shadow-inner'
+            }`}
+            title={!isPowerOn ? 'Nhấn để BẬT máy tính (ON)' : 'Bật / Khởi động lại (ON)'}
           >
             ON
           </button>

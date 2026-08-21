@@ -28,6 +28,9 @@ import {
 } from 'lucide-react';
 
 export default function App() {
+  // Power state (true = ON, false = OFF / black screen)
+  const [isPowerOn, setIsPowerOn] = useState<boolean>(true);
+
   // Calculator Core State
   const [expression, setExpression] = useState<string>('');
   const [result, setResult] = useState<string>('');
@@ -263,6 +266,45 @@ export default function App() {
 
   // Keypad main press processor
   const handleKeyPress = useCallback((action: string, label?: string) => {
+    // 1. Power ON key handling
+    if (action === 'ON') {
+      if (!isPowerOn) {
+        setIsPowerOn(true);
+        handleAC();
+        setIsShift(false);
+        setIsAlpha(false);
+        setIsSto(false);
+        setIsRcl(false);
+        setIsMenuOpen(false);
+        setIsSetupOpen(false);
+        sound.playKeyClick('shift');
+        return;
+      }
+      handleAC();
+      setIsMenuOpen(false);
+      setIsShift(false);
+      setIsAlpha(false);
+      return;
+    }
+
+    // 2. If the calculator is powered OFF, do not process any other keys
+    if (!isPowerOn) {
+      return;
+    }
+
+    // 3. SHIFT + AC = OFF (power off calculator)
+    if ((action === 'AC' && isShift) || action === 'OFF') {
+      setIsPowerOn(false);
+      setIsShift(false);
+      setIsAlpha(false);
+      setIsSto(false);
+      setIsRcl(false);
+      setIsMenuOpen(false);
+      setIsSetupOpen(false);
+      sound.playKeyClick('clear');
+      return;
+    }
+
     // Notify active LCD screen of the keypad action
     setKeypadAction({ action, timestamp: Date.now() });
 
@@ -297,12 +339,6 @@ export default function App() {
     if (action === 'ALPHA') {
       setIsAlpha(prev => !prev);
       setIsShift(false);
-      return;
-    }
-
-    if (action === 'ON') {
-      handleAC();
-      setIsMenuOpen(false);
       return;
     }
 
@@ -619,6 +655,7 @@ export default function App() {
     result,
     history,
     historyIndex,
+    isPowerOn,
   ]);
 
   // Physical Computer Keyboard shortcuts
@@ -629,6 +666,26 @@ export default function App() {
         e.target instanceof HTMLTextAreaElement ||
         e.target instanceof HTMLSelectElement
       ) {
+        return;
+      }
+
+      // If calculator is powered OFF, only allow turning it ON
+      if (!isPowerOn) {
+        if (e.key.toLowerCase() === 'o' || e.key === 'Escape' || e.key === 'Enter') {
+          handleKeyPress('ON');
+        }
+        return;
+      }
+
+      // Shortcut for turning OFF: Shift + Escape or Shift + C or Shift + Delete
+      if (e.shiftKey && (e.key === 'Escape' || e.key === 'Delete' || e.key.toLowerCase() === 'c')) {
+        e.preventDefault();
+        handleKeyPress('OFF');
+        return;
+      }
+
+      if (e.key.toLowerCase() === 'o') {
+        handleKeyPress('ON');
         return;
       }
 
@@ -692,10 +749,13 @@ export default function App() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleKeyPress]);
+  }, [handleKeyPress, isPowerOn]);
 
   // Restore calculation from history
   const handleRestoreFromHistory = (item: HistoryItem) => {
+    if (!isPowerOn) {
+      setIsPowerOn(true);
+    }
     if (item.mode !== mode) {
       setMode(item.mode);
       setModeLabel(item.modeLabel);
@@ -807,80 +867,150 @@ export default function App() {
         {/* Left Column: Realistic fx-580 Handheld Casing with Integrated In-Screen Modes */}
         <div
           id="fx580-casing"
-          className="w-full max-w-[440px] rounded-3xl bg-gradient-to-b from-[#222830] via-[#171b20] to-[#121519] border-2 border-neutral-700/80 p-4 sm:p-5 shadow-2xl flex flex-col gap-4 relative"
+          className="w-full max-w-[440px] rounded-[36px] bg-[#1a1f26] p-1.5 shadow-2xl relative border-4 border-[#e2e8f0]"
           style={{
             boxShadow:
-              '0 25px 50px -12px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.05), inset 0 2px 2px rgba(255, 255, 255, 0.1)',
+              '0 30px 60px -12px rgba(0, 0, 0, 0.85), 0 0 0 1px rgba(0,0,0,0.6), inset 0 2px 4px rgba(255, 255, 255, 0.4)',
           }}
         >
-          {/* Decorative Casio fx-580VN X Header Band */}
-          <div className="flex items-center justify-between px-2 pt-1 border-b border-neutral-800 pb-2">
-            <div>
-              <div className="text-[13px] font-black tracking-widest text-neutral-300 font-sans">
+          {/* Inner Carbon Faceplate */}
+          <div
+            className="w-full rounded-[30px] bg-gradient-to-b from-[#242930] via-[#1a1d22] to-[#121417] p-3.5 sm:p-4.5 flex flex-col gap-3 relative overflow-hidden border border-neutral-800"
+            style={{
+              backgroundImage:
+                'radial-gradient(circle at 1px 1px, rgba(255,255,255,0.04) 1px, transparent 0)',
+              backgroundSize: '4px 4px',
+            }}
+          >
+            {/* Authentic Casio fx-580VN X Header with BITEX Hologram Badge */}
+            <div className="flex items-center justify-between px-2 pt-0.5 pb-1 relative">
+              {/* Left Brand */}
+              <div className="text-[16px] sm:text-[18px] font-black tracking-widest text-white font-sans drop-shadow-sm">
                 CASIO
               </div>
-              <div className="text-[10px] font-bold text-amber-400 font-mono tracking-tight">
-                fx-580VN X
+
+              {/* Center: TEM CHỐNG GIẢ BITEX Hologram Sticker */}
+              <div
+                className="relative px-2 py-0.5 rounded-sm border border-neutral-400/60 shadow-md overflow-hidden flex flex-col items-center justify-center select-none"
+                style={{
+                  background:
+                    'linear-gradient(135deg, #d1d5db 0%, #f3f4f6 25%, #cbd5e1 50%, #e2e8f0 75%, #94a3b8 100%)',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.5), inset 0 0 6px rgba(255,255,255,0.8)',
+                }}
+                title="Tem Chống Giả BITEX Chính Hãng"
+              >
+                {/* Iridescent Rainbow Sheen */}
+                <div
+                  className="absolute inset-0 opacity-40 mix-blend-color-dodge pointer-events-none"
+                  style={{
+                    background:
+                      'linear-gradient(45deg, #ff0000 0%, #ffff00 25%, #00ff00 50%, #00ffff 75%, #ff00ff 100%)',
+                  }}
+                />
+                <div className="relative z-10 flex items-center space-x-1">
+                  <svg className="w-3.5 h-3.5 text-red-600 fill-current drop-shadow-xs" viewBox="0 0 24 24">
+                    <path d="M12 2L2 7l10 5 10-5-10-5zm0 9l-8-4v6l8 4 8-4v-6l-8 4z" />
+                  </svg>
+                  <div className="flex flex-col leading-none">
+                    <span className="text-[6.5px] font-black tracking-tighter text-amber-950 uppercase">
+                      TEM CHỐNG GIẢ
+                    </span>
+                    <span className="text-[8px] font-black tracking-wider text-red-700">
+                      BITEX
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Right Model Number */}
+              <div className="text-right">
+                <div className="text-[12px] sm:text-[13px] font-black text-neutral-200 font-sans tracking-tight">
+                  fx-580VN X
+                </div>
               </div>
             </div>
 
-            {/* Solar Cell Decor & ClassWiz Label */}
-            <div className="flex items-center space-x-2">
-              <div
-                className="w-16 h-4 rounded bg-gradient-to-r from-amber-950/80 to-amber-900/60 border border-amber-900/80 shadow-inner flex items-center justify-around px-1"
-                title="Solar Panel Simulator"
+            {/* CLASSWIZ Signature Magenta Title */}
+            <div className="text-center -mt-1.5 mb-0.5">
+              <span
+                className="text-[12px] sm:text-[13px] font-black tracking-[0.2em] uppercase font-sans text-transparent bg-clip-text bg-gradient-to-r from-pink-500 via-rose-400 to-pink-500 drop-shadow-[0_1px_2px_rgba(244,63,94,0.3)]"
               >
-                <div className="w-2.5 h-2.5 bg-black/40 rounded-xs" />
-                <div className="w-2.5 h-2.5 bg-black/40 rounded-xs" />
-                <div className="w-2.5 h-2.5 bg-black/40 rounded-xs" />
-              </div>
-              <span className="text-[11px] font-extrabold text-neutral-300 tracking-wider">
                 CLASSWIZ
               </span>
             </div>
-          </div>
 
-          {/* High Resolution Natural Textbook LCD Screen with Full In-Screen Mode Support */}
-          <CalculatorScreen
-            expression={expression}
-            result={result}
-            isShift={isShift}
-            isAlpha={isAlpha}
-            isSto={isSto}
-            isRcl={isRcl}
-            angleUnit={settings.angleUnit}
-            numberFormat={settings.numberFormat}
-            mode={mode}
-            modeLabel={modeLabel}
-            hasMemory={variables.M !== 0}
-            isError={isError}
-            errorMessage={errorMessage}
-            cursorPos={cursorPos}
-            contrast={settings.contrast}
-            isMenuOpen={isMenuOpen}
-            onSelectMode={(newMode, newLabel) => {
-              setMode(newMode);
-              setModeLabel(newLabel);
-              setIsMenuOpen(false);
-              handleAC();
-              sound.playKeyClick('shift');
-            }}
-            onCloseMenu={() => setIsMenuOpen(false)}
-            onSaveToHistory={handleSaveSpecializedHistory}
-            keypadAction={keypadAction}
-          />
+            {/* High Resolution Natural Textbook LCD Screen with Full In-Screen Mode Support */}
+            <CalculatorScreen
+              isPowerOn={isPowerOn}
+              expression={expression}
+              result={result}
+              isShift={isShift}
+              isAlpha={isAlpha}
+              isSto={isSto}
+              isRcl={isRcl}
+              angleUnit={settings.angleUnit}
+              numberFormat={settings.numberFormat}
+              mode={mode}
+              modeLabel={modeLabel}
+              hasMemory={variables.M !== 0}
+              isError={isError}
+              errorMessage={errorMessage}
+              cursorPos={cursorPos}
+              contrast={settings.contrast}
+              isMenuOpen={isMenuOpen}
+              onSelectMode={(newMode, newLabel) => {
+                setMode(newMode);
+                setModeLabel(newLabel);
+                setIsMenuOpen(false);
+                handleAC();
+                sound.playKeyClick('shift');
+              }}
+              onCloseMenu={() => setIsMenuOpen(false)}
+              onSaveToHistory={handleSaveSpecializedHistory}
+              keypadAction={keypadAction}
+            />
 
-          {/* Physical Keypad */}
-          <Keypad
-            onKeyPress={handleKeyPress}
-            isShift={isShift}
-            isAlpha={isAlpha}
-          />
+            {/* Keypad Container with Relative Positioning for BITEX Seal */}
+            <div className="relative">
+              {/* Physical Keypad */}
+              <Keypad
+                isPowerOn={isPowerOn}
+                onKeyPress={handleKeyPress}
+                isShift={isShift}
+                isAlpha={isAlpha}
+              />
 
-          {/* Bottom Branding / Model info */}
-          <div className="text-center text-[10px] font-mono text-neutral-500 pt-1 flex items-center justify-between px-2 border-t border-neutral-800">
-            <span>NATURAL-V.P.A.M.</span>
-            <span>552 FUNCTIONS</span>
+              {/* Genuine Circular BITEX Stamp Seal Watermark in Bottom Right Corner */}
+              <div
+                className="pointer-events-none absolute bottom-1 right-1 w-20 h-20 sm:w-24 sm:h-24 rounded-full border-2 border-cyan-500/40 opacity-35 flex flex-col items-center justify-center p-1 select-none transform rotate-[-8deg]"
+                style={{
+                  boxShadow: '0 0 10px rgba(6, 182, 212, 0.2)',
+                }}
+              >
+                <div className="w-full h-full rounded-full border border-dashed border-cyan-400/50 flex flex-col items-center justify-center text-center p-0.5">
+                  <span className="text-[5.5px] font-bold text-cyan-300 uppercase tracking-tighter leading-none">
+                    VIỆT NAM • NHÀ PHÂN PHỐI
+                  </span>
+                  <div className="flex items-center space-x-0.5 my-0.5">
+                    <svg className="w-3 h-3 text-red-500 fill-current" viewBox="0 0 24 24">
+                      <path d="M12 2L2 7l10 5 10-5-10-5zm0 9l-8-4v6l8 4 8-4v-6l-8 4z" />
+                    </svg>
+                    <span className="text-[9px] font-black text-cyan-200 tracking-wider">
+                      BITEX
+                    </span>
+                  </div>
+                  <span className="text-[5px] font-bold text-cyan-300 uppercase tracking-tighter leading-none">
+                    ĐỘC QUYỀN MÁY TÍNH CASIO
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Bottom Branding / Specs Info */}
+            <div className="text-center text-[9px] font-mono text-neutral-400 pt-1 flex items-center justify-between px-2 border-t border-neutral-800">
+              <span className="tracking-wider">NATURAL-V.P.A.M.</span>
+              <span className="font-bold text-neutral-300">552 FUNCTIONS</span>
+            </div>
           </div>
         </div>
 

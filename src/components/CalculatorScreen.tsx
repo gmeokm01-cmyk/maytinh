@@ -10,6 +10,7 @@ import { LCDInequality } from './LCDScreen/LCDInequality';
 import { LCDRatio } from './LCDScreen/LCDRatio';
 
 interface CalculatorScreenProps {
+  isPowerOn?: boolean;
   expression: string;
   result: string;
   isShift: boolean;
@@ -34,6 +35,7 @@ interface CalculatorScreenProps {
 }
 
 export const CalculatorScreen: React.FC<CalculatorScreenProps> = ({
+  isPowerOn = true,
   expression,
   result,
   isShift,
@@ -60,6 +62,33 @@ export const CalculatorScreen: React.FC<CalculatorScreenProps> = ({
   const safeCursor = Math.min(Math.max(0, cursorPos), expression.length);
   const beforeCursor = expression.slice(0, safeCursor);
   const afterCursor = expression.slice(safeCursor);
+
+  // When calculator is OFF (POWER OFF)
+  if (!isPowerOn) {
+    return (
+      <div
+        id="fx580-screen-container"
+        className="relative w-full min-h-[148px] rounded-lg border-2 border-[#161c22] bg-[#121814] p-2.5 sm:p-3 shadow-inner select-none font-mono text-transparent overflow-hidden flex flex-col items-center justify-center transition-colors duration-200"
+        style={{
+          boxShadow: 'inset 0 3px 10px rgba(0,0,0,0.85), inset 0 0 15px rgba(0,15,5,0.6)',
+        }}
+      >
+        {/* Faint unpowered LCD reflection glass texture */}
+        <div
+          className="pointer-events-none absolute inset-0 opacity-5"
+          style={{
+            backgroundImage:
+              'linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px)',
+            backgroundSize: '3px 3px',
+          }}
+        />
+        {/* Subtle diagonal light sheen across the unpowered glass */}
+        <div
+          className="pointer-events-none absolute inset-0 opacity-10 bg-gradient-to-tr from-transparent via-white/5 to-transparent"
+        />
+      </div>
+    );
+  }
 
   return (
     <div
@@ -149,7 +178,7 @@ export const CalculatorScreen: React.FC<CalculatorScreenProps> = ({
       {/* Main Screen Body */}
       <div className={`mt-1.5 ${contrastClass}`}>
         {isMenuOpen ? (
-          <LCDMenu onSelectMode={onSelectMode} onClose={onCloseMenu} />
+          <LCDMenu onSelectMode={onSelectMode} onClose={onCloseMenu} keypadAction={keypadAction} />
         ) : mode === 'equation' ? (
           <LCDEquation
             onSaveToHistory={onSaveToHistory}
