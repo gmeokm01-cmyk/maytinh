@@ -13,27 +13,36 @@ import {
   FileJson,
   Layers,
   HelpCircle,
+  Cloud,
+  CloudCheck,
+  RefreshCw,
 } from 'lucide-react';
 import { sound } from '../utils/sound';
 
 interface HistoryPanelProps {
   history: HistoryItem[];
   variables: MemoryVariables;
+  isFirestoreConnected?: boolean;
+  isSyncing?: boolean;
   onRecallHistory: (item: HistoryItem) => void;
   onClearHistory: () => void;
   onDeleteHistoryItem: (id: string) => void;
   onImportHistory: (imported: HistoryItem[]) => void;
   onOpenHelp: () => void;
+  onRefreshFirestore?: () => void;
 }
 
 export const HistoryPanel: React.FC<HistoryPanelProps> = ({
   history,
   variables,
+  isFirestoreConnected = true,
+  isSyncing = false,
   onRecallHistory,
   onClearHistory,
   onDeleteHistoryItem,
   onImportHistory,
   onOpenHelp,
+  onRefreshFirestore,
 }) => {
   const [activeTab, setActiveTab] = useState<'history' | 'variables' | 'json'>('history');
   const [filterMode, setFilterMode] = useState<string>('all');
@@ -121,13 +130,47 @@ export const HistoryPanel: React.FC<HistoryPanelProps> = ({
             <Clock className="w-4 h-4" />
           </div>
           <div>
-            <h2 className="text-sm font-bold text-white tracking-wide">Lịch sử & Dữ liệu JSON</h2>
-            <p className="text-[11px] text-neutral-400">Lưu trữ các phép tính bằng JSON</p>
+            <div className="flex items-center space-x-2">
+              <h2 className="text-sm font-bold text-white tracking-wide">Lịch sử & Firestore Cloud</h2>
+              {/* Firestore Live Badge */}
+              <div
+                className={`flex items-center space-x-1 px-1.5 py-0.5 rounded text-[9.5px] font-bold border ${
+                  isFirestoreConnected
+                    ? 'bg-emerald-950/60 border-emerald-700/50 text-emerald-300'
+                    : 'bg-amber-950/60 border-amber-700/50 text-amber-300'
+                }`}
+                title="Dữ liệu lịch sử được tự động đồng bộ lên Firebase Firestore (Project: quanlythoigiandocsach)"
+              >
+                <span
+                  className={`w-1.5 h-1.5 rounded-full ${
+                    isSyncing
+                      ? 'bg-amber-400 animate-ping'
+                      : isFirestoreConnected
+                      ? 'bg-emerald-400 animate-pulse'
+                      : 'bg-amber-400'
+                  }`}
+                />
+                <span>{isSyncing ? 'Đang đồng bộ...' : isFirestoreConnected ? 'Firestore Online' : 'Offline'}</span>
+              </div>
+            </div>
+            <p className="text-[11px] text-neutral-400">
+              Tự động lưu & đồng bộ thời gian thực lên Firebase
+            </p>
           </div>
         </div>
 
-        {/* Quick Help & Clear */}
+        {/* Quick Help, Refresh & Clear */}
         <div className="flex items-center space-x-1.5">
+          {onRefreshFirestore && (
+            <button
+              type="button"
+              onClick={onRefreshFirestore}
+              className="p-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white transition-colors"
+              title="Làm mới từ Firestore"
+            >
+              <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin text-amber-400' : ''}`} />
+            </button>
+          )}
           <button
             type="button"
             onClick={onOpenHelp}
@@ -141,7 +184,7 @@ export const HistoryPanel: React.FC<HistoryPanelProps> = ({
               type="button"
               onClick={onClearHistory}
               className="p-1.5 rounded-lg bg-red-950/40 hover:bg-red-900/60 text-red-300 border border-red-800/40 transition-colors"
-              title="Xoá toàn bộ lịch sử"
+              title="Xoá toàn bộ lịch sử (Local & Firestore)"
             >
               <Trash2 className="w-4 h-4" />
             </button>
@@ -238,7 +281,7 @@ export const HistoryPanel: React.FC<HistoryPanelProps> = ({
                 <Clock className="w-8 h-8 mb-2 opacity-40" />
                 <p className="text-xs font-medium text-neutral-400">Chưa có phép tính nào trong lịch sử</p>
                 <p className="text-[11px] mt-1 text-neutral-500">
-                  Thực hiện tính toán trên máy tính để lưu lại tự động
+                  Thực hiện tính toán trên máy tính để tự động lưu vào Firestore
                 </p>
               </div>
             ) : (
@@ -252,7 +295,13 @@ export const HistoryPanel: React.FC<HistoryPanelProps> = ({
                     <span className="font-semibold px-2 py-0.5 rounded-full bg-neutral-800 text-neutral-300 border border-neutral-700">
                       {item.modeLabel}
                     </span>
-                    <span>{item.timestampFormatted}</span>
+                    <div className="flex items-center space-x-1.5">
+                      <span className="text-[9px] text-emerald-400/80 font-mono flex items-center gap-0.5">
+                        <Cloud className="w-2.5 h-2.5" /> Firestore
+                      </span>
+                      <span>•</span>
+                      <span>{item.timestampFormatted}</span>
+                    </div>
                   </div>
 
                   {/* Expression */}
@@ -303,7 +352,7 @@ export const HistoryPanel: React.FC<HistoryPanelProps> = ({
                       type="button"
                       onClick={() => onDeleteHistoryItem(item.id)}
                       className="p-1 rounded text-neutral-500 hover:text-red-400 hover:bg-neutral-800 transition-colors"
-                      title="Xoá mục này"
+                      title="Xoá mục này khỏi lịch sử và Firestore"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
@@ -344,7 +393,7 @@ export const HistoryPanel: React.FC<HistoryPanelProps> = ({
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-neutral-400 flex items-center gap-1.5">
               <Code className="w-3.5 h-3.5 text-amber-400" />
-              <span>Dữ liệu JSON thô ({history.length} bản ghi)</span>
+              <span>Dữ liệu JSON ({history.length} bản ghi đồng bộ Firestore)</span>
             </span>
 
             <button

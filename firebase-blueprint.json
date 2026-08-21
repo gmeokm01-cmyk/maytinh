@@ -1,0 +1,79 @@
+{
+  "entities": {
+    "calculationHistory": {
+      "title": "CalculationHistory",
+      "description": "Lịch sử tính toán từ máy tính Casio fx-580VN X",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier of the history record",
+          "maxLength": 128
+        },
+        "timestamp": {
+          "type": "number",
+          "description": "Unix timestamp in milliseconds"
+        },
+        "timestampFormatted": {
+          "type": "string",
+          "description": "Human readable Vietnamese date-time",
+          "maxLength": 100
+        },
+        "mode": {
+          "type": "string",
+          "description": "Calculator mode identifier",
+          "maxLength": 50
+        },
+        "modeLabel": {
+          "type": "string",
+          "description": "Calculator mode display label",
+          "maxLength": 100
+        },
+        "expression": {
+          "type": "string",
+          "description": "Mathematical formula expression",
+          "maxLength": 2000
+        },
+        "displayExpression": {
+          "type": "string",
+          "description": "Display format mathematical expression",
+          "maxLength": 2000
+        },
+        "result": {
+          "type": "string",
+          "description": "Calculated result string",
+          "maxLength": 1000
+        },
+        "decimalResult": {
+          "type": "string",
+          "description": "Decimal representation",
+          "maxLength": 1000
+        },
+        "exactResult": {
+          "type": "string",
+          "description": "Exact fraction or radical representation",
+          "maxLength": 1000
+        },
+        "note": {
+          "type": "string",
+          "description": "Optional notes or tags",
+          "maxLength": 500
+        },
+        "category": {
+          "type": "string",
+          "description": "Calculation category tag",
+          "maxLength": 50
+        }
+      },
+      "required": ["timestamp", "expression", "result"]
+    }
+  },
+  "firestore": {
+    "/calculator_history/{historyId}": {
+      "schema": {
+        "$ref": "#/entities/calculationHistory"
+      },
+      "description": "Collection of calculation history records"
+    }
+  }
+}

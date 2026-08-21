@@ -10,6 +10,13 @@ import {
   loadHistoryFromStorage,
   saveHistoryToStorage,
 } from './utils/jsonStorage';
+import {
+  saveHistoryToFirestore,
+  deleteHistoryFromFirestore,
+  clearAllFirestoreHistory,
+  subscribeToFirestoreHistory,
+  testFirestoreConnection,
+} from './lib/firebase';
 import { sound } from './utils/sound';
 import { CalculatorScreen } from './components/CalculatorScreen';
 import { Keypad } from './components/Keypad';
@@ -79,9 +86,11 @@ export default function App() {
     PreAns: 0,
   });
 
-  // History & Storage
+  // History & Storage with Firestore Cloud Sync
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [historyIndex, setHistoryIndex] = useState<number>(-1);
+  const [isFirestoreConnected, setIsFirestoreConnected] = useState<boolean>(true);
+  const [isSyncing, setIsSyncing] = useState<boolean>(false);
 
   // Modals state
   const [isMenuOpen, setIsMenuOpen] = useState<boolean>(false);
@@ -89,13 +98,45 @@ export default function App() {
   const [isVariableInspectorOpen, setIsVariableInspectorOpen] = useState<boolean>(false);
   const [isHelpOpen, setIsHelpOpen] = useState<boolean>(false);
 
-  // Initialize history from storage
+  // Initialize history from storage & subscribe to Firestore in real-time
   useEffect(() => {
-    const loaded = loadHistoryFromStorage();
-    setHistory(loaded);
+    const initialLocal = loadHistoryFromStorage();
+    if (initialLocal.length > 0) {
+      setHistory(initialLocal);
+    }
+
+    testFirestoreConnection().then(connected => {
+      setIsFirestoreConnected(connected);
+    });
+
+    setIsSyncing(true);
+    const unsubscribe = subscribeToFirestoreHistory(
+      (firestoreItems) => {
+        setIsSyncing(false);
+        setIsFirestoreConnected(true);
+        if (firestoreItems.length > 0) {
+          setHistory(firestoreItems);
+          saveHistoryToStorage(firestoreItems);
+        } else if (initialLocal.length > 0) {
+          // If Firestore is empty initially, seed with current local records
+          initialLocal.forEach(item => {
+            saveHistoryToFirestore(item);
+          });
+        }
+      },
+      (err) => {
+        console.warn('Firestore subscription fallback:', err);
+        setIsSyncing(false);
+        setIsFirestoreConnected(false);
+      }
+    );
+
+    return () => {
+      unsubscribe();
+    };
   }, []);
 
-  // Save history whenever it updates
+  // Save history to local storage whenever history changes
   useEffect(() => {
     if (history.length > 0) {
       saveHistoryToStorage(history);
@@ -138,7 +179,7 @@ export default function App() {
         Ans: newAns,
       }));
 
-      // Add to history
+      // Add to history and persist to Firestore
       const now = Date.now();
       const newItem: HistoryItem = {
         id: `calc_${now}_${Math.random().toString(36).substr(2, 4)}`,
@@ -160,8 +201,10 @@ export default function App() {
         category: 'Standard',
       };
 
-      setHistory(prev => [newItem, ...prev]);
+      // Optimistic local state update + Firestore Cloud persistence
+      setHistory(prev => [newItem, ...prev.filter(i => i.id !== newItem.id)]);
       setHistoryIndex(-1);
+      saveHistoryToFirestore(newItem);
     }
   }, [expression, settings, variables, mode, modeLabel]);
 
@@ -261,7 +304,8 @@ export default function App() {
         year: 'numeric',
       }),
     };
-    setHistory(prev => [item, ...prev]);
+    setHistory(prev => [item, ...prev.filter(i => i.id !== item.id)]);
+    saveHistoryToFirestore(item);
   }, []);
 
   // Keypad main press processor
@@ -1014,16 +1058,35 @@ export default function App() {
           </div>
         </div>
 
-        {/* Right Column: EXCLUSIVELY for History & JSON Management */}
+        {/* Right Column: EXCLUSIVELY for History & JSON Management with Firestore Cloud Sync */}
         <div className="w-full lg:flex-1 max-w-xl flex flex-col h-full min-h-[580px]">
           <HistoryPanel
             history={history}
             variables={variables}
+            isFirestoreConnected={isFirestoreConnected}
+            isSyncing={isSyncing}
             onRecallHistory={handleRestoreFromHistory}
-            onClearHistory={() => setHistory([])}
-            onDeleteHistoryItem={id => setHistory(prev => prev.filter(i => i.id !== id))}
-            onImportHistory={imported => setHistory(prev => [...imported, ...prev])}
+            onClearHistory={() => {
+              clearAllFirestoreHistory();
+              setHistory([]);
+              saveHistoryToStorage([]);
+            }}
+            onDeleteHistoryItem={id => {
+              deleteHistoryFromFirestore(id);
+              setHistory(prev => prev.filter(i => i.id !== id));
+            }}
+            onImportHistory={imported => {
+              imported.forEach(item => saveHistoryToFirestore(item));
+              setHistory(prev => [...imported, ...prev]);
+            }}
             onOpenHelp={() => setIsHelpOpen(true)}
+            onRefreshFirestore={() => {
+              setIsSyncing(true);
+              testFirestoreConnection().then(conn => {
+                setIsFirestoreConnected(conn);
+                setIsSyncing(false);
+              });
+            }}
           />
         </div>
       </main>

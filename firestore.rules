@@ -1,0 +1,25 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default-deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidCalculationHistory(data) {
+      return data.expression is string && data.expression.size() <= 2000
+        && data.result is string && data.result.size() <= 1000
+        && (data.timestamp is number || data.timestamp is timestamp);
+    }
+
+    match /calculator_history/{historyId} {
+      allow read: if true;
+      allow create, update: if isValidId(historyId) && isValidCalculationHistory(request.resource.data);
+      allow delete: if isValidId(historyId);
+    }
+  }
+}
