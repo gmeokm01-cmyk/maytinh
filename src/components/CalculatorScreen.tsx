@@ -1,5 +1,13 @@
 import React from 'react';
-import { CalcMode, AngleUnit, NumberFormat } from '../types';
+import { CalcMode, AngleUnit, NumberFormat, HistoryItem } from '../types';
+import { LCDMenu } from './LCDScreen/LCDMenu';
+import { LCDEquation } from './LCDScreen/LCDEquation';
+import { LCDMatrix } from './LCDScreen/LCDMatrix';
+import { LCDVector } from './LCDScreen/LCDVector';
+import { LCDTable } from './LCDScreen/LCDTable';
+import { LCDStatistics } from './LCDScreen/LCDStatistics';
+import { LCDInequality } from './LCDScreen/LCDInequality';
+import { LCDRatio } from './LCDScreen/LCDRatio';
 
 interface CalculatorScreenProps {
   expression: string;
@@ -18,7 +26,11 @@ interface CalculatorScreenProps {
   cursorPos: number;
   contrast: number;
   activeBase?: 'DEC' | 'HEX' | 'BIN' | 'OCT';
-  onScreenClick?: () => void;
+  isMenuOpen: boolean;
+  onSelectMode: (mode: CalcMode, label: string) => void;
+  onCloseMenu: () => void;
+  onSaveToHistory: (item: Omit<HistoryItem, 'id' | 'timestamp' | 'timestampFormatted'>) => void;
+  keypadAction: { action: string; timestamp: number } | null;
 }
 
 export const CalculatorScreen: React.FC<CalculatorScreenProps> = ({
@@ -36,14 +48,18 @@ export const CalculatorScreen: React.FC<CalculatorScreenProps> = ({
   errorMessage,
   contrast,
   activeBase,
+  isMenuOpen,
+  onSelectMode,
+  onCloseMenu,
+  onSaveToHistory,
+  keypadAction,
 }) => {
-  // LCD contrast filter styling
   const contrastClass = contrast > 5 ? 'brightness-95 contrast-105' : 'brightness-100';
 
   return (
     <div
       id="fx580-screen-container"
-      className="relative w-full rounded-md border-2 border-[#1c242c] bg-[#9bb0a0] p-3 shadow-inner select-none font-mono text-[#0a120c] overflow-hidden"
+      className="relative w-full min-h-[148px] rounded-lg border-2 border-[#1c242c] bg-[#9bb0a0] p-2.5 sm:p-3 shadow-inner select-none font-mono text-[#0a120c] overflow-hidden"
       style={{
         boxShadow: 'inset 0 2px 6px rgba(0,0,0,0.55), inset 0 0 12px rgba(0,30,10,0.25)',
       }}
@@ -58,9 +74,11 @@ export const CalculatorScreen: React.FC<CalculatorScreenProps> = ({
         }}
       />
 
-      {/* Top Status Bar (ClassWiz LCD top row indicators) */}
-      <div className={`flex items-center justify-between border-b border-[#7d9482] pb-1 text-[11px] font-bold tracking-wider ${contrastClass}`}>
-        <div className="flex items-center space-x-1.5 sm:space-x-2.5">
+      {/* Top Status Bar */}
+      <div
+        className={`flex items-center justify-between border-b border-[#7d9482] pb-1 text-[11px] font-bold tracking-wider ${contrastClass}`}
+      >
+        <div className="flex items-center space-x-1.5 sm:space-x-2">
           {/* SHIFT indicator */}
           <span
             className={`px-1 py-0.5 rounded text-[10px] font-extrabold transition-opacity duration-150 ${
@@ -92,15 +110,22 @@ export const CalculatorScreen: React.FC<CalculatorScreenProps> = ({
             M
           </span>
 
-          {/* Angle Unit indicator */}
+          {/* Angle Unit */}
           <span className="bg-[#111c14] text-[#d6e5d8] px-1 rounded text-[9px] font-black">
             {angleUnit === 'DEG' ? 'D' : angleUnit === 'RAD' ? 'R' : 'G'}
           </span>
 
-          {/* Base indicator if Base-N mode */}
+          {/* Base-N indicator */}
           {mode === 'base_n' && activeBase && (
             <span className="bg-[#111c14] text-[#d6e5d8] px-1 rounded text-[9px] font-black">
               {activeBase}
+            </span>
+          )}
+
+          {/* Complex indicator */}
+          {mode === 'complex' && (
+            <span className="bg-[#111c14] text-[#d6e5d8] px-1 rounded text-[9px] font-black">
+              i
             </span>
           )}
 
@@ -110,39 +135,64 @@ export const CalculatorScreen: React.FC<CalculatorScreenProps> = ({
 
         {/* Mode Label right badge */}
         <div className="flex items-center space-x-1">
-          <span className="truncate max-w-[130px] sm:max-w-[170px] text-[10px] font-semibold text-[#18281d] text-right">
-            {modeLabel}
+          <span className="truncate max-w-[120px] sm:max-w-[150px] text-[10px] font-semibold text-[#18281d] text-right">
+            {isMenuOpen ? 'MENU' : modeLabel.replace('Mode ', 'M')}
           </span>
         </div>
       </div>
 
-      {/* Main Screen Body: Expression & Result Area */}
-      <div className={`mt-2 flex min-h-[78px] flex-col justify-between ${contrastClass}`}>
-        {/* Input line (Natural textbook style) */}
-        <div className="relative min-h-[30px] text-left text-[17px] sm:text-[19px] font-bold tracking-tight text-[#08120a] break-words whitespace-pre-wrap leading-tight">
-          {expression || (
-            <span className="inline-block h-5 w-2 animate-pulse bg-[#08120a] align-middle opacity-80" />
-          )}
-          {expression && (
-            <span className="inline-block h-4 w-1.5 ml-0.5 animate-pulse bg-[#08120a] align-middle" />
-          )}
-        </div>
+      {/* Main Screen Body */}
+      <div className={`mt-1.5 ${contrastClass}`}>
+        {isMenuOpen ? (
+          <LCDMenu onSelectMode={onSelectMode} onClose={onCloseMenu} />
+        ) : mode === 'equation' ? (
+          <LCDEquation
+            onSaveToHistory={onSaveToHistory}
+            onExitMode={() => onSelectMode('calculate', 'Mode 1: Tính toán chuẩn')}
+            keypadAction={keypadAction}
+          />
+        ) : mode === 'matrix' ? (
+          <LCDMatrix onSaveToHistory={onSaveToHistory} keypadAction={keypadAction} />
+        ) : mode === 'vector' ? (
+          <LCDVector onSaveToHistory={onSaveToHistory} keypadAction={keypadAction} />
+        ) : mode === 'table' ? (
+          <LCDTable onSaveToHistory={onSaveToHistory} keypadAction={keypadAction} />
+        ) : mode === 'statistics' ? (
+          <LCDStatistics onSaveToHistory={onSaveToHistory} keypadAction={keypadAction} />
+        ) : mode === 'inequality' ? (
+          <LCDInequality onSaveToHistory={onSaveToHistory} keypadAction={keypadAction} />
+        ) : mode === 'ratio' ? (
+          <LCDRatio onSaveToHistory={onSaveToHistory} keypadAction={keypadAction} />
+        ) : (
+          /* Standard Calculation / Complex / Base-N LCD View */
+          <div className="flex min-h-[90px] flex-col justify-between">
+            {/* Input expression line */}
+            <div className="relative min-h-[36px] text-left text-[17px] sm:text-[19px] font-bold tracking-tight text-[#08120a] break-words whitespace-pre-wrap leading-snug">
+              {expression || (
+                <span className="inline-block h-4.5 w-2 animate-pulse bg-[#08120a] align-middle opacity-80" />
+              )}
+              {expression && (
+                <span className="inline-block h-4 w-1.5 ml-0.5 animate-pulse bg-[#08120a] align-middle" />
+              )}
+            </div>
 
-        {/* Result line (Right aligned high-contrast) */}
-        <div className="mt-1 flex items-end justify-between border-t border-dashed border-[#7d9482] pt-1">
-          <div className="text-[11px] text-[#2c3d31] font-semibold">
-            {isError ? 'ERROR' : result ? 'Ans' : ''}
+            {/* Result line */}
+            <div className="mt-1 flex items-end justify-between border-t border-dashed border-[#7d9482] pt-1">
+              <div className="text-[11px] text-[#2c3d31] font-semibold">
+                {isError ? 'ERROR' : result ? 'Ans' : ''}
+              </div>
+              <div
+                className={`text-right font-black tracking-tight ${
+                  isError
+                    ? 'text-sm text-red-950 font-bold'
+                    : 'text-[22px] sm:text-[26px] text-[#050e07]'
+                }`}
+              >
+                {isError ? errorMessage || result : result || '0'}
+              </div>
+            </div>
           </div>
-          <div
-            className={`text-right font-black tracking-tight ${
-              isError
-                ? 'text-sm text-red-950 font-bold'
-                : 'text-[22px] sm:text-[26px] text-[#050e07]'
-            }`}
-          >
-            {isError ? errorMessage || result : result || '0'}
-          </div>
-        </div>
+        )}
       </div>
     </div>
   );

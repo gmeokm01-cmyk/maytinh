@@ -1,40 +1,30 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { 
-  CalcMode, 
-  HistoryItem, 
-  MemoryVariables, 
-  CalculatorSettings, 
-  AngleUnit, 
-  NumberFormat, 
-  FractionFormat 
+import {
+  CalcMode,
+  HistoryItem,
+  MemoryVariables,
+  CalculatorSettings,
 } from './types';
 import { evaluateExpression } from './utils/mathEngine';
-import { 
-  loadHistoryFromStorage, 
-  saveHistoryToStorage, 
-  exportHistoryAsJSON 
+import {
+  loadHistoryFromStorage,
+  saveHistoryToStorage,
 } from './utils/jsonStorage';
 import { sound } from './utils/sound';
 import { CalculatorScreen } from './components/CalculatorScreen';
 import { Keypad } from './components/Keypad';
 import { MenuSelector } from './components/MenuSelector';
 import { SetupModal } from './components/SetupModal';
-import { HistoryDrawer } from './components/HistoryDrawer';
+import { HistoryPanel } from './components/HistoryPanel';
 import { VariableInspector } from './components/VariableInspector';
-import { SpecializedModeViews } from './components/SpecializedModeViews';
 import { QuickHelpModal } from './components/QuickHelpModal';
-import { 
-  History, 
-  Settings, 
-  Database, 
-  HelpCircle, 
-  Volume2, 
-  VolumeX, 
-  Grid, 
-  Download, 
-  Maximize2, 
-  Sparkles,
-  Calculator as CalcIcon
+import {
+  Settings,
+  Database,
+  HelpCircle,
+  Volume2,
+  VolumeX,
+  Calculator as CalcIcon,
 } from 'lucide-react';
 
 export default function App() {
@@ -55,7 +45,9 @@ export default function App() {
   // Mode state
   const [mode, setMode] = useState<CalcMode>('calculate');
   const [modeLabel, setModeLabel] = useState<string>('Mode 1: Tính toán');
-  const [showSpecializedView, setShowSpecializedView] = useState<boolean>(false);
+
+  // Keypad event stream dispatched to active LCD sub-screen
+  const [keypadAction, setKeypadAction] = useState<{ action: string; timestamp: number } | null>(null);
 
   // Settings
   const [settings, setSettings] = useState<CalculatorSettings>({
@@ -91,7 +83,6 @@ export default function App() {
   // Modals state
   const [isMenuOpen, setIsMenuOpen] = useState<boolean>(false);
   const [isSetupOpen, setIsSetupOpen] = useState<boolean>(false);
-  const [isHistoryOpen, setIsHistoryOpen] = useState<boolean>(false);
   const [isVariableInspectorOpen, setIsVariableInspectorOpen] = useState<boolean>(false);
   const [isHelpOpen, setIsHelpOpen] = useState<boolean>(false);
 
@@ -108,7 +99,7 @@ export default function App() {
     }
   }, [history]);
 
-  // Handle calculation evaluation
+  // Handle calculation evaluation in standard / complex / base-n mode
   const handleCalculate = useCallback(() => {
     if (!expression.trim()) return;
 
@@ -182,7 +173,6 @@ export default function App() {
     setIsError(false);
     setExpression(prev => {
       if (!prev) return '';
-      // Check if ending with function like sin(, cos(, tan(, ln(, log(, √(, etc.
       const funcMatch = prev.match(/(sin|cos|tan|asin|acos|atan|log_|log|ln|d\/dx|∫|Σ|Abs|GCD|LCM|Pol|Rec|ˣ√|√)\($/);
       if (funcMatch) {
         return prev.slice(0, -funcMatch[0].length);
@@ -222,70 +212,108 @@ export default function App() {
   // Variable store / recall
   const handleVariableAction = useCallback((varName: keyof MemoryVariables) => {
     if (isSto) {
-      // Store current result or expression into variable
       const valToStore = result ? (isNaN(parseFloat(result)) ? result : parseFloat(result)) : 0;
       setVariables(prev => ({ ...prev, [varName]: valToStore }));
       setIsSto(false);
       setResult(`-> ${varName}`);
       sound.playKeyClick('shift');
     } else if (isRcl) {
-      // Recall variable value into expression
       const val = variables[varName];
       insertToken(String(val));
       setIsRcl(false);
       sound.playKeyClick('shift');
     } else if (isAlpha) {
-      // Type variable letter
       insertToken(varName);
       setIsAlpha(false);
     }
   }, [isSto, isRcl, isAlpha, result, variables, insertToken]);
 
+  // Save item from specialized LCD screen (Equation, Matrix, Table, Vector, etc.)
+  const handleSaveSpecializedHistory = useCallback((newItem: Omit<HistoryItem, 'id' | 'timestamp' | 'timestampFormatted'>) => {
+    const now = Date.now();
+    const item: HistoryItem = {
+      ...newItem,
+      id: `calc_${now}_${Math.random().toString(36).substr(2, 4)}`,
+      timestamp: now,
+      timestampFormatted: new Date(now).toLocaleString('vi-VN', {
+        hour: '2-digit',
+        minute: '2-digit',
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+      }),
+    };
+    setHistory(prev => [item, ...prev]);
+  }, []);
+
   // Keypad main press processor
   const handleKeyPress = useCallback((action: string, label?: string) => {
-    const shift = isShift;
-    const alpha = isAlpha;
+    // Notify active LCD screen of the keypad action
+    setKeypadAction({ action, timestamp: Date.now() });
 
-    // Reset single-use shift / alpha states unless pressing shift / alpha themselves
-    if (action !== 'SHIFT' && action !== 'ALPHA') {
-      setIsShift(false);
-      setIsAlpha(false);
+    // In specialized modes (Equation, Matrix, Vector, Table, Statistics, Inequality, Ratio),
+    // the LCD screen handles numerical inputs, arrows, and calculation internally
+    const isSpecializedScreen = [
+      'equation',
+      'matrix',
+      'vector',
+      'table',
+      'statistics',
+      'inequality',
+      'ratio',
+    ].includes(mode);
+
+    if (action === 'MENU') {
+      if (isShift) {
+        setIsSetupOpen(true);
+        setIsShift(false);
+      } else {
+        setIsMenuOpen(prev => !prev);
+      }
+      return;
     }
 
+    if (action === 'SHIFT') {
+      setIsShift(prev => !prev);
+      setIsAlpha(false);
+      return;
+    }
+
+    if (action === 'ALPHA') {
+      setIsAlpha(prev => !prev);
+      setIsShift(false);
+      return;
+    }
+
+    if (action === 'ON') {
+      handleAC();
+      setIsMenuOpen(false);
+      return;
+    }
+
+    // If we're on a specialized LCD screen or the LCD Menu is open, delegate controls
+    if (isSpecializedScreen || isMenuOpen) {
+      if (action === 'AC') {
+        // Let the specialized screen catch AC to clear cell or go back to input matrix
+      }
+      setIsShift(false);
+      setIsAlpha(false);
+      return;
+    }
+
+    // Standard Math Calculation Engine Handlers
+    const shift = isShift;
+    const alpha = isAlpha;
+    setIsShift(false);
+    setIsAlpha(false);
+
     switch (action) {
-      case 'SHIFT':
-        setIsShift(prev => !prev);
-        setIsAlpha(false);
-        return;
-
-      case 'ALPHA':
-        setIsAlpha(prev => !prev);
-        setIsShift(false);
-        return;
-
-      case 'MENU':
-        if (shift) {
-          setIsSetupOpen(true);
-        } else {
-          setIsMenuOpen(true);
-        }
-        return;
-
-      case 'ON':
-        handleAC();
-        return;
-
       case 'DEL':
         handleDel();
         return;
 
       case 'AC':
-        if (shift) {
-          // OFF / Reset
-          handleAC();
-        } else {
-          handleAC();
-        }
+        handleAC();
         return;
 
       case '=':
@@ -311,15 +339,12 @@ export default function App() {
         return;
 
       case 'OPTN':
-        setShowSpecializedView(prev => !prev);
+        setIsMenuOpen(true);
         return;
 
       case 'CALC':
         if (alpha) {
           insertToken(' = ');
-        } else if (shift) {
-          // Solve
-          handleCalculate();
         } else {
           handleCalculate();
         }
@@ -329,7 +354,6 @@ export default function App() {
         if (alpha) {
           handleVariableAction('M');
         } else {
-          // Add to M
           const currentVal = parseFloat(result || '0') || 0;
           setVariables(prev => ({
             ...prev,
@@ -444,10 +468,9 @@ export default function App() {
         return;
 
       case 'ENG':
-        if (alpha) {
+        if (alpha || mode === 'complex') {
           insertToken('i');
         } else {
-          // ENG notation toggle
           const n = parseFloat(result);
           if (!isNaN(n)) {
             setResult(n.toExponential(3).replace('e', '×10^'));
@@ -514,7 +537,6 @@ export default function App() {
         return;
 
       case 'UP':
-        // Navigate history tape up
         if (history.length > 0) {
           const nextIdx = Math.min(history.length - 1, historyIndex + 1);
           setHistoryIndex(nextIdx);
@@ -527,7 +549,6 @@ export default function App() {
         return;
 
       case 'DOWN':
-        // Navigate history tape down
         if (history.length > 0 && historyIndex > 0) {
           const prevIdx = historyIndex - 1;
           setHistoryIndex(prevIdx);
@@ -543,12 +564,7 @@ export default function App() {
         }
         return;
 
-      case 'LEFT':
-      case 'RIGHT':
-        return;
-
       default:
-        // Numeric digits and basic operations (*, /, +, -, etc.)
         if (shift) {
           if (action === '*') insertToken(' nPr ');
           else if (action === '/') insertToken(' nCr ');
@@ -565,6 +581,8 @@ export default function App() {
   }, [
     isShift,
     isAlpha,
+    isMenuOpen,
+    mode,
     handleCalculate,
     handleAC,
     handleDel,
@@ -579,7 +597,6 @@ export default function App() {
   // Physical Computer Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Don't intercept if user is typing inside modal inputs
       if (
         e.target instanceof HTMLInputElement ||
         e.target instanceof HTMLTextAreaElement ||
@@ -590,43 +607,57 @@ export default function App() {
 
       if (e.key >= '0' && e.key <= '9') {
         sound.playKeyClick('num');
-        insertToken(e.key);
+        handleKeyPress(e.key);
       } else if (e.key === '+') {
         sound.playKeyClick('num');
-        insertToken('+');
+        handleKeyPress('+');
       } else if (e.key === '-') {
         sound.playKeyClick('num');
-        insertToken('-');
+        handleKeyPress('-');
       } else if (e.key === '*') {
         sound.playKeyClick('num');
-        insertToken('×');
+        handleKeyPress('×');
       } else if (e.key === '/') {
         e.preventDefault();
         sound.playKeyClick('num');
-        insertToken('÷');
+        handleKeyPress('÷');
       } else if (e.key === '.' || e.key === ',') {
         sound.playKeyClick('num');
-        insertToken('.');
+        handleKeyPress('.');
       } else if (e.key === '(' || e.key === ')') {
         sound.playKeyClick('func');
-        insertToken(e.key);
+        handleKeyPress(e.key);
       } else if (e.key === '^') {
         sound.playKeyClick('func');
-        insertToken('^');
+        handleKeyPress('^');
       } else if (e.key === 'Enter' || e.key === '=') {
         e.preventDefault();
         sound.playKeyClick('equals');
-        handleCalculate();
+        handleKeyPress('=');
       } else if (e.key === 'Backspace') {
         sound.playKeyClick('clear');
-        handleDel();
+        handleKeyPress('DEL');
       } else if (e.key === 'Escape') {
         sound.playKeyClick('clear');
-        handleAC();
+        handleKeyPress('AC');
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        sound.playKeyClick('func');
+        handleKeyPress('UP');
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        sound.playKeyClick('func');
+        handleKeyPress('DOWN');
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        sound.playKeyClick('func');
+        handleKeyPress('LEFT');
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        sound.playKeyClick('func');
+        handleKeyPress('RIGHT');
       } else if (e.key.toLowerCase() === 'm') {
-        setIsMenuOpen(true);
-      } else if (e.key.toLowerCase() === 'h') {
-        setIsHistoryOpen(true);
+        setIsMenuOpen(prev => !prev);
       } else if (e.key.toLowerCase() === 's') {
         setIsSetupOpen(true);
       }
@@ -634,15 +665,19 @@ export default function App() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [insertToken, handleCalculate, handleDel, handleAC]);
+  }, [handleKeyPress]);
 
   // Restore calculation from history
   const handleRestoreFromHistory = (item: HistoryItem) => {
+    if (item.mode !== mode) {
+      setMode(item.mode);
+      setModeLabel(item.modeLabel);
+    }
     setExpression(item.expression);
     setResult(item.result);
     setExactResult(item.exactResult || item.result);
     setDecimalResult(item.decimalResult || item.result);
-    setIsHistoryOpen(false);
+    sound.playKeyClick('shift');
   };
 
   return (
@@ -671,19 +706,15 @@ export default function App() {
 
         {/* Global Toolbar Buttons */}
         <div className="flex items-center space-x-2">
-          {/* History / JSON Drawer Button */}
+          {/* Mode Switcher Quick Button */}
           <button
-            id="open-history-btn"
+            id="open-menu-top-btn"
             type="button"
-            onClick={() => setIsHistoryOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-amber-400 hover:text-amber-300 text-xs font-bold border border-neutral-700 shadow-sm transition"
-            title="Xem lịch sử tính toán và dữ liệu JSON"
+            onClick={() => setIsMenuOpen(true)}
+            className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 text-xs font-bold border border-amber-500/30 shadow-sm transition"
           >
-            <History className="w-4 h-4" />
-            <span className="hidden md:inline">Lịch sử JSON</span>
-            <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-neutral-900 text-neutral-200 border border-neutral-700">
-              {history.length}
-            </span>
+            <span>{modeLabel}</span>
+            <span className="text-[10px] opacity-75">(MENU)</span>
           </button>
 
           {/* Variables Inspector */}
@@ -691,7 +722,7 @@ export default function App() {
             id="open-vars-btn"
             type="button"
             onClick={() => setIsVariableInspectorOpen(true)}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-200 text-xs font-bold border border-neutral-700 transition"
+            className="p-1.5 sm:px-2.5 sm:py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-200 text-xs font-bold border border-neutral-700 transition flex items-center gap-1"
             title="Xem và chỉnh sửa các biến A, B, C, D, E, F, X, Y, M"
           >
             <Database className="w-4 h-4 text-cyan-400" />
@@ -736,16 +767,16 @@ export default function App() {
             type="button"
             onClick={() => setIsHelpOpen(true)}
             className="p-2 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white border border-neutral-700 transition"
-            title="Hướng dẫn sử dụng"
+            title="Hướng dẫn sử dụng & Phím tắt"
           >
             <HelpCircle className="w-4 h-4 text-amber-400" />
           </button>
         </div>
       </header>
 
-      {/* Main Workspace Body */}
-      <main className="flex-1 max-w-6xl w-full mx-auto p-3 sm:p-6 flex flex-col lg:flex-row items-center lg:items-start justify-center gap-6">
-        {/* Left / Center Column: Realistic fx-580 Handheld Casing */}
+      {/* Main Workspace Body: Left Handheld Calculator & Right JSON History Panel */}
+      <main className="flex-1 max-w-7xl w-full mx-auto p-3 sm:p-6 flex flex-col lg:flex-row items-center lg:items-start justify-center gap-6">
+        {/* Left Column: Realistic fx-580 Handheld Casing with Integrated In-Screen Modes */}
         <div
           id="fx580-casing"
           className="w-full max-w-[440px] rounded-3xl bg-gradient-to-b from-[#222830] via-[#171b20] to-[#121519] border-2 border-neutral-700/80 p-4 sm:p-5 shadow-2xl flex flex-col gap-4 relative"
@@ -781,7 +812,7 @@ export default function App() {
             </div>
           </div>
 
-          {/* High Resolution Natural Textbook LCD Screen */}
+          {/* High Resolution Natural Textbook LCD Screen with Full In-Screen Mode Support */}
           <CalculatorScreen
             expression={expression}
             result={result}
@@ -798,6 +829,17 @@ export default function App() {
             errorMessage={errorMessage}
             cursorPos={cursorPos}
             contrast={settings.contrast}
+            isMenuOpen={isMenuOpen}
+            onSelectMode={(newMode, newLabel) => {
+              setMode(newMode);
+              setModeLabel(newLabel);
+              setIsMenuOpen(false);
+              handleAC();
+              sound.playKeyClick('shift');
+            }}
+            onCloseMenu={() => setIsMenuOpen(false)}
+            onSaveToHistory={handleSaveSpecializedHistory}
+            keypadAction={keypadAction}
           />
 
           {/* Physical Keypad */}
@@ -814,251 +856,23 @@ export default function App() {
           </div>
         </div>
 
-        {/* Right Column: Quick Mode Solvers & Direct Calculation History Panel */}
-        <div className="w-full lg:flex-1 max-w-xl flex flex-col gap-4">
-          {/* Quick Mode Solver Panel */}
-          {mode !== 'calculate' || showSpecializedView ? (
-            <SpecializedModeViews
-              mode={mode}
-              onClose={() => {
-                setShowSpecializedView(false);
-                setMode('calculate');
-                setModeLabel('Mode 1: Tính toán');
-              }}
-              onSaveToHistory={newItem => {
-                const now = Date.now();
-                const item: HistoryItem = {
-                  ...newItem,
-                  id: `calc_${now}_${Math.random().toString(36).substr(2, 4)}`,
-                  timestamp: now,
-                  timestampFormatted: new Date(now).toLocaleString('vi-VN'),
-                };
-                setHistory(prev => [item, ...prev]);
-              }}
-            />
-          ) : (
-            /* Quick Tools Card when in standard Calculate mode */
-            <div className="rounded-2xl bg-[#131922] border border-neutral-800 p-5 shadow-xl space-y-4">
-              <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
-                <div className="flex items-center space-x-2">
-                  <Sparkles className="w-4 h-4 text-amber-400" />
-                  <h3 className="font-bold text-sm text-neutral-200">
-                    BẢNG ĐIỀU KHIỂN & CHẾ ĐỘ NHANH
-                  </h3>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setIsMenuOpen(true)}
-                  className="px-2.5 py-1 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 rounded-lg text-xs font-bold border border-amber-500/30 transition"
-                >
-                  Chọn 11 Mode (MENU)
-                </button>
-              </div>
-
-              {/* Quick Mode shortcuts */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMode('equation');
-                    setModeLabel('Mode 9: Phương trình & Hệ PT');
-                  }}
-                  className="p-2.5 rounded-xl bg-neutral-900 border border-neutral-800 hover:border-amber-500 text-left transition group"
-                >
-                  <span className="text-xs font-bold text-neutral-200 group-hover:text-amber-400 block">
-                    Mode 9: Giải PT & Hệ PT
-                  </span>
-                  <span className="text-[11px] text-neutral-500 block mt-0.5">
-                    Hệ 2,3,4 ẩn & Bậc 2,3,4
-                  </span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMode('matrix');
-                    setModeLabel('Mode 4: Ma trận');
-                  }}
-                  className="p-2.5 rounded-xl bg-neutral-900 border border-neutral-800 hover:border-amber-500 text-left transition group"
-                >
-                  <span className="text-xs font-bold text-neutral-200 group-hover:text-amber-400 block">
-                    Mode 4: Ma trận
-                  </span>
-                  <span className="text-[11px] text-neutral-500 block mt-0.5">
-                    det, A⁻¹, nhân ma trận
-                  </span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMode('table');
-                    setModeLabel('Mode 8: Bảng giá trị');
-                  }}
-                  className="p-2.5 rounded-xl bg-neutral-900 border border-neutral-800 hover:border-amber-500 text-left transition group"
-                >
-                  <span className="text-xs font-bold text-neutral-200 group-hover:text-amber-400 block">
-                    Mode 8: Bảng f(x)
-                  </span>
-                  <span className="text-[11px] text-neutral-500 block mt-0.5">
-                    Start, End, Step
-                  </span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMode('vector');
-                    setModeLabel('Mode 5: Vectơ');
-                  }}
-                  className="p-2.5 rounded-xl bg-neutral-900 border border-neutral-800 hover:border-amber-500 text-left transition group"
-                >
-                  <span className="text-xs font-bold text-neutral-200 group-hover:text-amber-400 block">
-                    Mode 5: Vectơ
-                  </span>
-                  <span className="text-[11px] text-neutral-500 block mt-0.5">
-                    Tích vô hướng, có hướng
-                  </span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMode('complex');
-                    setModeLabel('Mode 2: Số phức');
-                  }}
-                  className="p-2.5 rounded-xl bg-neutral-900 border border-neutral-800 hover:border-amber-500 text-left transition group"
-                >
-                  <span className="text-xs font-bold text-neutral-200 group-hover:text-amber-400 block">
-                    Mode 2: Số phức
-                  </span>
-                  <span className="text-[11px] text-neutral-500 block mt-0.5">
-                    |z|, arg(z), liên hợp
-                  </span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMode('base_n');
-                    setModeLabel('Mode 3: Hệ cơ số Base-N');
-                  }}
-                  className="p-2.5 rounded-xl bg-neutral-900 border border-neutral-800 hover:border-amber-500 text-left transition group"
-                >
-                  <span className="text-xs font-bold text-neutral-200 group-hover:text-amber-400 block">
-                    Mode 3: Base-N
-                  </span>
-                  <span className="text-[11px] text-neutral-500 block mt-0.5">
-                    DEC, HEX, BIN, OCT
-                  </span>
-                </button>
-              </div>
-
-              {/* Sample math buttons */}
-              <div className="pt-2 border-t border-neutral-800 space-y-2">
-                <span className="text-xs font-bold text-neutral-400 block">
-                  Biểu thức toán học mẫu fx-580:
-                </span>
-                <div className="flex flex-wrap gap-1.5">
-                  {[
-                    'sin(30) + cos(60)',
-                    '√(144) + 3^3',
-                    '5 nCr 2',
-                    'GCD(24, 36)',
-                    '∫(2x + 1, 0, 3)',
-                    'd/dx(x^2, 3)',
-                    'Σ(x, 1, 10)',
-                  ].map(sample => (
-                    <button
-                      key={sample}
-                      type="button"
-                      onClick={() => {
-                        setExpression(sample);
-                        sound.playKeyClick('func');
-                      }}
-                      className="px-2.5 py-1 rounded-lg bg-neutral-900 hover:bg-neutral-800 text-amber-300 font-mono text-xs border border-neutral-800 hover:border-neutral-700 transition"
-                    >
-                      {sample}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Quick Mini History Tape */}
-          <div className="rounded-2xl bg-[#131922] border border-neutral-800 p-5 shadow-xl flex flex-col space-y-3">
-            <div className="flex items-center justify-between border-b border-neutral-800 pb-2.5">
-              <div className="flex items-center space-x-2">
-                <History className="w-4 h-4 text-amber-400" />
-                <h3 className="font-bold text-sm text-neutral-200">
-                  LỊCH SỬ GẦN ĐÂY (JSON PERSISTENT)
-                </h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsHistoryOpen(true)}
-                className="text-xs font-bold text-amber-400 hover:text-amber-300"
-              >
-                Mở rộng JSON →
-              </button>
-            </div>
-
-            {history.length === 0 ? (
-              <p className="text-xs text-neutral-500 py-3 text-center">
-                Chưa có phép tính nào. Hãy thực hiện tính toán trên máy tính.
-              </p>
-            ) : (
-              <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
-                {history.slice(0, 4).map(item => (
-                  <div
-                    key={item.id}
-                    className="p-2.5 rounded-xl bg-neutral-900/80 border border-neutral-800 flex items-center justify-between text-xs font-mono"
-                  >
-                    <div className="min-w-0 flex-1 pr-2">
-                      <p className="text-neutral-300 font-bold truncate">
-                        {item.displayExpression || item.expression}
-                      </p>
-                      <p className="text-[11px] text-neutral-500">
-                        {item.modeLabel} • {item.timestampFormatted}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <span className="text-amber-400 font-black text-sm block">
-                        = {item.result}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => handleRestoreFromHistory(item)}
-                        className="text-[10px] text-cyan-400 hover:underline"
-                      >
-                        Nạp lại
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Quick Export JSON button */}
-            <div className="pt-2 border-t border-neutral-800 flex justify-between items-center text-xs text-neutral-400">
-              <span>Đã lưu {history.length} bản ghi</span>
-              <button
-                type="button"
-                onClick={() => exportHistoryAsJSON(history)}
-                className="flex items-center gap-1 px-3 py-1 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 rounded-lg font-bold transition"
-              >
-                <Download className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Tải tệp JSON</span>
-              </button>
-            </div>
-          </div>
+        {/* Right Column: EXCLUSIVELY for History & JSON Management */}
+        <div className="w-full lg:flex-1 max-w-xl flex flex-col h-full min-h-[580px]">
+          <HistoryPanel
+            history={history}
+            variables={variables}
+            onRecallHistory={handleRestoreFromHistory}
+            onClearHistory={() => setHistory([])}
+            onDeleteHistoryItem={id => setHistory(prev => prev.filter(i => i.id !== id))}
+            onImportHistory={imported => setHistory(prev => [...imported, ...prev])}
+            onOpenHelp={() => setIsHelpOpen(true)}
+          />
         </div>
       </main>
 
-      {/* --- MODALS & DRAWERS --- */}
+      {/* --- GLOBAL POPUP MODALS --- */}
 
-      {/* 1. Menu Mode Selector */}
+      {/* 1. Menu Mode Selector Modal (Alternative to LCD Menu) */}
       {isMenuOpen && (
         <MenuSelector
           currentMode={mode}
@@ -1066,11 +880,7 @@ export default function App() {
             setMode(newMode);
             setModeLabel(newLabel);
             setIsMenuOpen(false);
-            if (newMode !== 'calculate') {
-              setShowSpecializedView(true);
-            } else {
-              setShowSpecializedView(false);
-            }
+            handleAC();
             sound.playKeyClick('shift');
           }}
           onClose={() => setIsMenuOpen(false)}
@@ -1086,17 +896,7 @@ export default function App() {
         />
       )}
 
-      {/* 3. History & JSON Drawer */}
-      <HistoryDrawer
-        history={history}
-        isOpen={isHistoryOpen}
-        onClose={() => setIsHistoryOpen(false)}
-        onRestoreCalculation={handleRestoreFromHistory}
-        onClearHistory={() => setHistory([])}
-        onUpdateHistory={setHistory}
-      />
-
-      {/* 4. Variable Memory Inspector */}
+      {/* 3. Variable Memory Inspector Modal */}
       <VariableInspector
         variables={variables}
         onUpdateVariable={(name, val) => {
@@ -1106,7 +906,7 @@ export default function App() {
         onClose={() => setIsVariableInspectorOpen(false)}
       />
 
-      {/* 5. Quick Help Modal */}
+      {/* 4. Quick Help Modal */}
       <QuickHelpModal
         isOpen={isHelpOpen}
         onClose={() => setIsHelpOpen(false)}
