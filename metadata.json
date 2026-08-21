@@ -1,0 +1,8 @@
+{
+  "name": "Máy Tính FX-580VN X",
+  "description": "Mô phỏng máy tính khoa học cầm tay fx 580 đầy đủ tính năng, giải phương trình, ma trận, bảng giá trị và lưu trữ lịch sử tính toán JSON.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
